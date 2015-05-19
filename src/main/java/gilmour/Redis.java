@@ -1,5 +1,9 @@
 package gilmour;
 
+import com.lambdaworks.redis.RedisClient;
+import com.lambdaworks.redis.pubsub.RedisPubSubConnection;
+import com.lambdaworks.redis.pubsub.RedisPubSubListener;
+
 import java.util.ArrayList;
 import java.util.Map;
 
@@ -40,7 +44,7 @@ class GilmourData {
     private GilmourData() {
     }
 
-    static <T> GilmourData createGilmourData() {
+    static GilmourData createGilmourData() {
         return new GilmourData();
     }
 
@@ -119,7 +123,25 @@ class RedisGilmourResponder implements GilmourResponder{
 }
 
 public class Redis implements Gilmour {
+    private String redishost;
+    private int redisport;
+    private RedisClient redis;
+    private RedisPubSubConnection<String, String> pubsub;
     private Map<String, ArrayList<Subscription>> handlers;
+
+    public Redis(String host, int port) {
+        if (host == null) host = "127.0.0.1";
+        if (port == 0) port = 4579;
+        this.redishost = host;
+        this.redisport = port;
+        this.redis = new RedisClient(host, port);
+        this.pubsub = redis.connectPubSub();
+        setupListeners();
+    }
+
+    public Redis() {
+        this("127.0.0.1", 4579);
+    }
 
     public void subscribe(String topic, GilmourHandler h, GilmourHandlerOpts opts) {
         final Subscription sub = new Subscription(h, opts);
@@ -127,21 +149,25 @@ public class Redis implements Gilmour {
             handlers.put(topic, new ArrayList<Subscription>());
         }
         handlers.get(topic).add(sub);
-        // TODO: do actual subscription
+        if (topic.endsWith("*")) {
+            pubsub.psubscribe(topic);
+        } else {
+            pubsub.subscribe(topic);
+        }
     }
 
     public void unsubscribe(String topic, GilmourHandler h) {
         final ArrayList<Subscription> subs = handlers.get(topic);
         subs.remove(h);
         if (subs.isEmpty()) {
-            // TODO: Unsubsribe topic
+            pubsub.unsubscribe(topic);
         }
     }
 
     public void unsubscribe(String topic) {
         final ArrayList<Subscription> subs = handlers.get(topic);
         subs.clear();
-        // TODO: Unsubscribe topic
+        pubsub.unsubscribe(topic);
 
     }
 
@@ -172,7 +198,26 @@ public class Redis implements Gilmour {
 
     }
 
+    private void setupListeners() {
+        final Redis self = this;
+        pubsub.addListener(new RedisPubSubListener<String, String>() {
+            @Override public void message(String s, String s2) {}
+            @Override public void message(String s, String k1, String s2) {}
+            @Override public void subscribed(String s, long l) {}
+            @Override public void psubscribed(String s, long l) {}
+            @Override public void unsubscribed(String s, long l) {}
+            @Override public void punsubscribed(String s, long l) {}
 
+            public void onMessage(String channel, String message) {
+                self.processMessage(channel, null, message);
+            }
+
+            public void onPMessage(String pattern, String channel, String message) {
+                self.processMessage(channel, pattern, message);
+            }
+        });
+
+    }
     private String makeSenderId() {
         // TODO
         return "TODO";
@@ -215,4 +260,6 @@ public class Redis implements Gilmour {
 
     private class EmptyResponse {
     }
+
+
 }
