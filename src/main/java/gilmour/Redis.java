@@ -1,11 +1,17 @@
 package gilmour;
 
+import com.google.gson.Gson;
+import com.google.gson.JsonElement;
 import com.lambdaworks.redis.RedisClient;
+import com.lambdaworks.redis.RedisConnection;
+import com.lambdaworks.redis.protocol.SetArgs;
 import com.lambdaworks.redis.pubsub.RedisPubSubConnection;
 import com.lambdaworks.redis.pubsub.RedisPubSubListener;
 
-import java.util.ArrayList;
-import java.util.Map;
+import java.util.*;
+import java.util.logging.Logger;
+
+import static java.util.UUID.*;
 
 /**
  * Created by aditya@datascale.io on 19/05/15.
@@ -39,7 +45,7 @@ class Subscription {
 class GilmourData {
     private String sender;
     private int code;
-    private Object userdata;
+    private Object data;
 
     private GilmourData() {
     }
@@ -66,21 +72,42 @@ class GilmourData {
         return this;
     }
 
-    public Object getUserdata() {
-        return userdata;
+    public Object getData() {
+        return data;
     }
 
-    public GilmourData setUserdata(Object userdata) {
-        this.userdata = userdata;
+    public GilmourData setData(Object data) {
+        this.data = data;
         return this;
+    }
+
+}
+
+class RecvGilmourData {
+    private String sender;
+    private int code;
+    private JsonElement data;
+
+    public RecvGilmourData() {}
+    public <T> T getData(Class<T> cls) {
+        Gson gson = new Gson();
+        return gson.fromJson(data, cls);
+    }
+
+    public String getSender() {
+        return sender;
+    }
+
+    public int getCode() {
+        return code;
     }
 }
 
 class RedisGilmourRequest implements GilmourRequest {
     private String topic;
-    private GilmourData gData;
+    private RecvGilmourData gData;
 
-    public RedisGilmourRequest(String topic, GilmourData gd) {
+    public RedisGilmourRequest(String topic, RecvGilmourData gd) {
         this.topic = topic;
         this.gData = gd;
     }
@@ -90,57 +117,74 @@ class RedisGilmourRequest implements GilmourRequest {
     }
 
     @Override
-    public <T> T data() {
-        return null;
+    public <T> T data(Class<T> cls) {
+        return this.gData.<T>getData(cls);
     }
 }
 
 class RedisGilmourResponder implements GilmourResponder{
     private final String sender;
     private final String senderchannel;
-    private Gilmour gilmourinst;
+    private Object message = null;
+    private int code = 0;
+
+    public boolean isResponseSent() {
+        return responseSent;
+    }
+
+    private boolean responseSent = false;
 
     public static String responseChannel(String sender) {
         return "response." + sender;
     }
 
-    public RedisGilmourResponder(String sender, Gilmour gilmour) {
+    public RedisGilmourResponder(String sender) {
         this.sender = sender;
-        this.gilmourinst = gilmour;
         this.senderchannel = responseChannel(sender);
     }
 
     @Override
-    public <T> void send(T response) {
-        gilmourinst.publish(senderchannel, response);
+    public <T> void respond(T response) {
+        message = response;
     }
 
     @Override
-    public <T> void send(T response, int code) {
-        gilmourinst.publish(senderchannel, response, code);
-        // TODO: publish to redis
+    public <T> void respond(T response, int code) {
+        message = response;
+        this.code = code;
+    }
+
+    @Override
+    public void send(Gilmour gilmourinst) {
+        if (code == 0)
+            gilmourinst.publish(senderchannel, message);
+        else
+            gilmourinst.publish(senderchannel, message, code);
     }
 }
 
 public class Redis implements Gilmour {
+    private final int defaultport = 6379;
+    private final RedisConnection<String, String> redisconnection;
     private String redishost;
     private int redisport;
     private RedisClient redis;
     private RedisPubSubConnection<String, String> pubsub;
-    private Map<String, ArrayList<Subscription>> handlers;
+    private HashMap<String, ArrayList<Subscription>> handlers;
 
     public Redis(String host, int port) {
         if (host == null) host = "127.0.0.1";
-        if (port == 0) port = 4579;
+        if (port == 0) port = defaultport;
         this.redishost = host;
         this.redisport = port;
         this.redis = new RedisClient(host, port);
         this.pubsub = redis.connectPubSub();
-        setupListeners();
+        this.redisconnection = redis.connect();
+        this.handlers = new HashMap<>();
     }
 
     public Redis() {
-        this("127.0.0.1", 4579);
+        this("127.0.0.1", 0);
     }
 
     public void subscribe(String topic, GilmourHandler h, GilmourHandlerOpts opts) {
@@ -192,40 +236,43 @@ public class Redis implements Gilmour {
         return sender;
     }
 
-
-
     public void start() {
-
+        setupListeners();
     }
 
     private void setupListeners() {
         final Redis self = this;
         pubsub.addListener(new RedisPubSubListener<String, String>() {
-            @Override public void message(String s, String s2) {}
-            @Override public void message(String s, String k1, String s2) {}
             @Override public void subscribed(String s, long l) {}
             @Override public void psubscribed(String s, long l) {}
             @Override public void unsubscribed(String s, long l) {}
             @Override public void punsubscribed(String s, long l) {}
 
-            public void onMessage(String channel, String message) {
+            @Override
+            public void message(String channel, String message) {
+                Logger.getGlobal().info("Got message:" + message);
                 self.processMessage(channel, null, message);
             }
 
-            public void onPMessage(String pattern, String channel, String message) {
+            @Override
+            public void message(String pattern, String channel, String message) {
+                Logger.getGlobal().info("Got message:" + message);
                 self.processMessage(channel, pattern, message);
             }
         });
 
     }
     private String makeSenderId() {
-        // TODO
-        return "TODO";
+        return randomUUID().toString();
     }
 
     private <T> void publishWithSender(String topic, T data, int code, String sender) {
-        final GilmourData gd = GilmourData.createGilmourData().setSender(sender).setUserdata(data);
-        // TODO: publish to sender
+        final GilmourData gd = GilmourData.createGilmourData().setSender(sender).setData(data)
+                .setCode(code);
+        Gson gson = new Gson();
+        final String message = gson.toJson(gd);
+        Logger.getGlobal().info(message);
+        redisconnection.publish(topic, message);
     }
 
     private void processMessage(String topic, String pattern, String message) {
@@ -237,29 +284,64 @@ public class Redis implements Gilmour {
         }
         final ArrayList<Subscription> subs = handlers.get(key);
         subs.forEach((s) -> {
+            if (s.getOpts().isOneshot())
+                handlers.remove(s);
             processRequest(s, topic, message);
         });
     }
 
     private void processRequest(Subscription sub, String topic, String data) {
-        final GilmourData d = parseJson(data);
+        final RecvGilmourData d = parseJson(data);
+        GilmourHandlerOpts opts = sub.getOpts();
+        if (opts.getGroup() != null) {
+            if (!acquire_group_lock(opts.getGroup(), d.getSender()))
+                return;
+        }
         final Gilmour self = this;
         new Thread(() -> {
             RedisGilmourRequest req = new RedisGilmourRequest(topic, d);
-            RedisGilmourResponder res = new RedisGilmourResponder(d.getSender(), self);
-            sub.getHandler().process(req, res);
-            // TODO - Exception handling
-            res.<EmptyResponse>send(new EmptyResponse());
-        });
+            RedisGilmourResponder res = new RedisGilmourResponder(d.getSender());
+            try {
+                sub.getHandler().process(req, res);
+            }
+            catch (Exception e) {
+                res.<GilmourErrorResponse>respond(new GilmourErrorResponse(e.getMessage(),
+                        e.getStackTrace().toString()), 500);
+            }
+            finally {
+                if (!topic.startsWith("response"))
+                    res.send(self);
+            }
+        }).start();
     }
 
-    private GilmourData parseJson(String data) {
-        //TODO: Jackson
-        return null;
+    private boolean acquire_group_lock(String group, String sender) {
+        String key = sender + group;
+        SetArgs setargs = SetArgs.Builder.ex(600).nx();
+        String resp = this.redisconnection.set(key, key, setargs);
+        Logger.getGlobal().info("Lock acquire response: " + resp);
+        Boolean gotit = (resp != null && resp.equals("OK"));
+//        if (!gotit)
+//            Logger.getGlobal().info("Did not get lock for " + key);
+        return gotit;
     }
 
-    private class EmptyResponse {
+    private RecvGilmourData parseJson(String data) {
+        Gson gson = new Gson();
+        return gson.fromJson(data, RecvGilmourData.class);
     }
+
+    private class GilmourErrorResponse {
+        private String message;
+        private String stacktrace;
+
+        public GilmourErrorResponse(String message, String stacktrace) {
+            this.message = message;
+            this.stacktrace = stacktrace;
+        }
+    }
+
+    private class GilmourEmptyResponse {}
 
 
 }

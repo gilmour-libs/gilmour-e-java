@@ -5,5 +5,5 @@ package gilmour;
  */
 public interface GilmourRequest {
     public String sender();
-    public <T> T data();
+    <T> T data(Class<T> cls);
 }

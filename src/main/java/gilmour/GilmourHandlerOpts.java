@@ -6,7 +6,6 @@ package gilmour;
 public class GilmourHandlerOpts {
 
     private String group = null;
-    private boolean excl = false;
     private boolean oneshot = false;
 
     private GilmourHandlerOpts() {
@@ -22,15 +21,6 @@ public class GilmourHandlerOpts {
 
     public GilmourHandlerOpts setGroup(String group) {
         this.group = group;
-        return this;
-    }
-
-    public boolean isExcl() {
-        return excl;
-    }
-
-    public GilmourHandlerOpts setExcl(boolean excl) {
-        this.excl = excl;
         return this;
     }
 
