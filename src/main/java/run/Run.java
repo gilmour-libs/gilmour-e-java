@@ -6,6 +6,7 @@ import gilmour.Redis;
 /**
  * Created by aditya@datascale.io on 19/05/15.
  */
+/*
 public class Run {
     static class Foo {
         String bar;
@@ -44,3 +45,4 @@ public class Run {
             });
     }
 }
+*/
