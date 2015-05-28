@@ -5,8 +5,6 @@ import gilmour.GilmourSubscription;
 import org.testng.Assert;
 import org.testng.annotations.Test;
 
-import java.util.logging.Logger;
-
 /**
  * Created by aditya@datascale.io on 27/05/15.
  */
@@ -18,8 +16,8 @@ public class WildcardTest extends BaseTest {
         TestData received = new TestData();
         final Object lock = new Object();
         GilmourSubscription sub = redis.subscribe(wildTopic, (r, w) -> {
-            TestData td = r.<TestData>data(TestData.class);
-            Logger.getGlobal().info("Received data: " + td.strval);
+            TestData td = r.data(TestData.class);
+            logger.debug("Received data: " + td.strval);
             received.strval = td.strval;
             received.intval = td.intval;
             synchronized (lock) {
@@ -47,12 +45,12 @@ public class WildcardTest extends BaseTest {
         TestData received = new TestData();
         final Object lock = new Object();
         GilmourSubscription sub = redis.subscribe(wildTopic, (r, w) -> {
-            TestData td = r.<TestData>data(TestData.class);
+            TestData td = r.data(TestData.class);
             w.respond(new TestData(td.strval, td.intval + 1));
         }, GilmourHandlerOpts.createGilmourHandlerOpts());
         TestData sent = new TestData("command", 0);
         redis.publish(topic + ".foo", sent, (r,w) -> {
-            TestData td = r.<TestData>data(TestData.class);
+            TestData td = r.data(TestData.class);
             received.intval = td.intval;
             received.strval = td.strval;
             synchronized (lock) {

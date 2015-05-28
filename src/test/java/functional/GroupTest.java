@@ -5,7 +5,6 @@ import org.testng.Assert;
 import org.testng.annotations.Test;
 
 import java.util.ArrayList;
-import java.util.logging.Logger;
 
 /**
  * Created by aditya@datascale.io on 27/05/15.
@@ -16,15 +15,12 @@ public class GroupTest extends BaseTest {
         final String topic = "testtopic";
         ArrayList<TestData> received = new ArrayList<>();
         final Object lock = new Object();
-        GilmourHandler handler = new GilmourHandler() {
-            @Override
-            public void process(GilmourRequest r, GilmourResponder w) {
-                TestData td = r.<TestData>data(TestData.class);
-                Logger.getGlobal().info("Received data: " + td.strval);
-                received.add(td);
-                synchronized (lock) {
-                    lock.notifyAll();
-                }
+        GilmourHandler handler = (r, w) -> {
+            TestData td = r.data(TestData.class);
+            logger.debug("Received data: " + td.strval);
+            received.add(td);
+            synchronized (lock) {
+                lock.notifyAll();
             }
         };
         GilmourSubscription sub1 = redis.subscribe(topic, handler,
@@ -56,8 +52,8 @@ public class GroupTest extends BaseTest {
         GilmourHandler handler = new GilmourHandler() {
             @Override
             public void process(GilmourRequest r, GilmourResponder w) {
-                TestData td = r.<TestData>data(TestData.class);
-                Logger.getGlobal().info("Received data: " + td.strval);
+                TestData td = r.data(TestData.class);
+                logger.debug("Received data: " + td.strval);
                 received.add(td);
                 synchronized (lock) {
                     lock.notifyAll();
@@ -94,15 +90,12 @@ public class GroupTest extends BaseTest {
         final String wildTopic = topic + ".*";
         ArrayList<TestData> received = new ArrayList<>();
         final Object lock = new Object();
-        GilmourHandler handler = new GilmourHandler() {
-            @Override
-            public void process(GilmourRequest r, GilmourResponder w) {
-                TestData td = r.<TestData>data(TestData.class);
-                Logger.getGlobal().info("Received data: " + td.strval);
-                received.add(td);
-                synchronized (lock) {
-                    lock.notifyAll();
-                }
+        GilmourHandler handler = (r, w) -> {
+            TestData td = r.data(TestData.class);
+            logger.debug("Received data: " + td.strval);
+            received.add(td);
+            synchronized (lock) {
+                lock.notifyAll();
             }
         };
         GilmourSubscription sub1 = redis.subscribe(wildTopic, handler,
@@ -111,7 +104,7 @@ public class GroupTest extends BaseTest {
                 GilmourHandlerOpts.createGilmourHandlerOpts().setGroup("testgroup"));
         GilmourSubscription sub3 = redis.subscribe(wildTopic, handler,
                 GilmourHandlerOpts.createGilmourHandlerOpts().setGroup("testgroup"));
-        TestData sent = new TestData("command", 0);
+        TestData sent = new TestData("doubleWildcardTest", 0);
         synchronized (lock) {
             redis.publish(topic + ".foo", sent);
             try {

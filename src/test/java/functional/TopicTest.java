@@ -1,13 +1,9 @@
 package functional;
 
 import gilmour.GilmourHandlerOpts;
-import gilmour.Redis;
 import gilmour.GilmourSubscription;
 import org.testng.Assert;
-import org.testng.annotations.BeforeClass;
 import org.testng.annotations.Test;
-
-import java.util.logging.Logger;
 
 /**
  * Created by aditya@datascale.io on 27/05/15.
@@ -28,8 +24,8 @@ public class TopicTest extends BaseTest {
         final Object lock = new Object();
 
         GilmourSubscription sub = redis.subscribe(topic, (r, w) -> {
-            TestData td = r.<TestData>data(TestData.class);
-            Logger.getGlobal().info("Received data: " + td.strval);
+            TestData td = r.data(TestData.class);
+            logger.debug("Received data: " + td.strval);
             received.strval = td.strval;
             received.intval = td.intval;
             synchronized (lock) {
@@ -84,12 +80,12 @@ public class TopicTest extends BaseTest {
         RecvData rd = new RecvData();
         final Object lock = new Object();
         GilmourSubscription sub = redis.subscribe(topic, (r, w) -> {
-            TestData td = r.<TestData>data(TestData.class);
+            TestData td = r.data(TestData.class);
             w.respond(new TestData(td.strval, td.intval + 1));
         }, GilmourHandlerOpts.createGilmourHandlerOpts());
         TestData sent = new TestData("command", 0);
         redis.publish(topic, sent, (r,w) -> {
-            TestData td = r.<TestData>data(TestData.class);
+            TestData td = r.data(TestData.class);
             received.intval = td.intval;
             received.strval = td.strval;
             rd.code = r.code();
@@ -117,7 +113,7 @@ public class TopicTest extends BaseTest {
         RecvData rd = new RecvData();
         final Object lock = new Object();
         GilmourSubscription sub = redis.subscribe(topic, (r, w) -> {
-            TestData td = r.<TestData>data(TestData.class);
+            TestData td = r.data(TestData.class);
             w.respond(new TestData(td.strval, td.intval + 1), respcode);
         }, GilmourHandlerOpts.createGilmourHandlerOpts());
         TestData sent = new TestData("command", 0);
@@ -145,7 +141,7 @@ public class TopicTest extends BaseTest {
         RecvData rd = new RecvData();
         final Object lock = new Object();
         GilmourSubscription sub = redis.subscribe(topic, (r, w) -> {
-            TestData td = r.<TestData>data(TestData.class);
+            TestData td = r.data(TestData.class);
             w.respond(new TestData(td.strval, td.intval + 1), respcode);
             throw new RuntimeException();
         }, GilmourHandlerOpts.createGilmourHandlerOpts());

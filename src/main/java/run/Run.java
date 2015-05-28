@@ -1,6 +1,5 @@
 package run;
 
-import gilmour.GilmourHandlerOpts;
 import gilmour.Redis;
 
 /**
