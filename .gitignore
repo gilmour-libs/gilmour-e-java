@@ -1,3 +1,6 @@
 *.idea
 /bin/
 /target/
+.gradle
+.settings
+build

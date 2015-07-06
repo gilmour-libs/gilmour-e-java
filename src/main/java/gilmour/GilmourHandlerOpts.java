@@ -7,6 +7,16 @@ public class GilmourHandlerOpts {
 
     private String group = null;
     private boolean oneshot = false;
+    private boolean sendResponse = true;
+
+    public boolean sendResponse() {
+        return sendResponse;
+    }
+
+    public GilmourHandlerOpts setSendResponse(boolean sendResponse) {
+        this.sendResponse = sendResponse;
+        return this;
+    }
 
     private GilmourHandlerOpts() {
     }

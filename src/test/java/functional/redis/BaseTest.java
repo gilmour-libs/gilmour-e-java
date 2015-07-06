@@ -1,4 +1,4 @@
-package functional;
+package functional.redis;
 
 import gilmour.Redis;
 import org.apache.logging.log4j.LogManager;
@@ -10,7 +10,7 @@ import org.testng.annotations.BeforeClass;
  * Created by aditya@datascale.io@datascale.io on 27/05/15.
  */
 public class BaseTest {
-    Redis redis;
+    protected Redis redis;
     static final Logger logger = LogManager.getLogger();
 
     static class TestData {

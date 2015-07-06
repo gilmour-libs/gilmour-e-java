@@ -1,4 +1,4 @@
-package functional;
+package functional.redis;
 
 import gilmour.GilmourHandlerOpts;
 import gilmour.GilmourSubscription;

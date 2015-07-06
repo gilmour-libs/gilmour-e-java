@@ -1,4 +1,4 @@
-package functional;
+package functional.redis;
 
 import gilmour.*;
 import org.testng.Assert;
@@ -49,15 +49,12 @@ public class GroupTest extends BaseTest {
         final String topic = "testtopic";
         ArrayList<TestData> received = new ArrayList<>();
         final Object lock = new Object();
-        GilmourHandler handler = new GilmourHandler() {
-            @Override
-            public void process(GilmourRequest r, GilmourResponder w) {
-                TestData td = r.data(TestData.class);
-                logger.debug("Received data: " + td.strval);
-                received.add(td);
-                synchronized (lock) {
-                    lock.notifyAll();
-                }
+        GilmourHandler handler = (r, w) -> {
+            TestData td = r.data(TestData.class);
+            logger.debug("Received data: " + td.strval);
+            received.add(td);
+            synchronized (lock) {
+                lock.notifyAll();
             }
         };
         GilmourSubscription sub1 = redis.subscribe(topic, handler,

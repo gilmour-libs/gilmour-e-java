@@ -6,6 +6,7 @@ package gilmour;
 public interface GilmourRequest {
     String sender();
     <T> T data(Class<T> cls);
+    String stringData();
 
     String topic();
     int code();
