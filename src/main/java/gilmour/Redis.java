@@ -9,9 +9,6 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 import java.util.ArrayList;
-import java.util.Iterator;
-
-import static java.util.UUID.randomUUID;
 
 
 class RedisGilmourRequest implements GilmourRequest {
@@ -91,7 +88,7 @@ class RedisGilmourResponder implements GilmourResponder{
     }
 }
 
-public class Redis implements Gilmour {
+public class Redis extends Gilmour {
     private static String defaultErrorQueue = "gilmour.errorqueue";
     private static String defaultErrorTopic = "gilmour.errors";
 
@@ -102,7 +99,6 @@ public class Redis implements Gilmour {
     private final RedisConnection<String, String> redisconnection;
     private final RedisClient redis;
     private final RedisPubSubConnection<String, String> pubsub;
-    private final Subscribers subscribers;
     private errorMethods errorMethod;
     private String errorQueue;
     private String errorTopic;
@@ -117,7 +113,6 @@ public class Redis implements Gilmour {
         this.redis = new RedisClient(host, port);
         this.pubsub = redis.connectPubSub();
         this.redisconnection = redis.connect();
-        this.subscribers = new Subscribers();
         errorMethod = errorMethods.NONE;
     }
 
@@ -179,8 +174,7 @@ public class Redis implements Gilmour {
 
     @Override
     public GilmourSubscription subscribe(String topic, GilmourHandler h, GilmourHandlerOpts opts) {
-        final GilmourSubscription sub = new GilmourSubscription(h, opts);
-        addSubscriber(subscribers, topic, sub);
+        GilmourSubscription sub = super.add_subscriber(topic, h, opts);
         if (topic.endsWith("*")) {
             pubsub.psubscribe(topic);
         } else {
@@ -191,7 +185,7 @@ public class Redis implements Gilmour {
 
     @Override
     public void unsubscribe(String topic, GilmourSubscription s) {
-        final ArrayList<GilmourSubscription> remaining = removeSubscriber(subscribers, topic, s);
+        final ArrayList<GilmourSubscription> remaining = super.remove_subscriber(topic, s);
         if (remaining.isEmpty()) {
             pubsub.unsubscribe(topic);
         }
@@ -199,7 +193,7 @@ public class Redis implements Gilmour {
 
     @Override
     public void unsubscribe(String topic) {
-        clearSubscribers(subscribers, topic);
+        super.remove_subscribers(topic);
         pubsub.unsubscribe(topic);
     }
 
@@ -261,7 +255,7 @@ public class Redis implements Gilmour {
         } else {
             key = topic;
         }
-        execSubscribers(subscribers, key, topic, message);
+        execSubscribers(key, topic, message);
     }
 
     @Override

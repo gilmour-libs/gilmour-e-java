@@ -40,8 +40,7 @@ public class HealthTest extends BaseTest {
                 GilmourProtocol.GilmourErrorResponse err = r.data(GilmourProtocol.GilmourErrorResponse.class);
                 logger.debug("Received data: " + err);
                 errors.add(err);
-            }
-            catch (Exception e) {
+            } catch (Exception e) {
                 System.err.println("Cannot parse error channel message");
             }
             synchronized (errlock) {

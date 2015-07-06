@@ -10,32 +10,35 @@ import static gilmour.GilmourProtocol.makeSenderId;
 /**
  * Created by aditya@datascale.io on 19/05/15.
  */
-public interface Gilmour {
-    class Subscribers extends HashMap<String, ArrayList<GilmourSubscription>> {}
-    GilmourSubscription subscribe(String topic, GilmourHandler h, GilmourHandlerOpts opts);
-    void unsubscribe(String topic, GilmourSubscription h);
-    void unsubscribe(String topic);
-    public String responseTopic(String sender);
-    <T> void publish(String topic, T data, int code, String sender);
-    boolean isAResponse(String topic);
-    boolean canReportErrors();
-    void reportError(GilmourProtocol.GilmourErrorResponse message);
-    boolean acquire_group_lock(String group, String sender);
-    void start();
+public abstract class Gilmour {
+    private class Subscribers extends HashMap<String, ArrayList<GilmourSubscription>> {}
+    private Subscribers subscribers = new Subscribers();
 
-    default <T> String publish(String topic, T data) {
+    public abstract GilmourSubscription subscribe(String topic, GilmourHandler h, GilmourHandlerOpts opts);
+    public abstract void unsubscribe(String topic, GilmourSubscription s);
+    public abstract void unsubscribe(String topic);
+
+    public abstract String responseTopic(String sender);
+    public abstract <T> void publish(String topic, T data, int code, String sender);
+    public abstract boolean isAResponse(String topic);
+    public abstract boolean canReportErrors();
+    public abstract void reportError(GilmourProtocol.GilmourErrorResponse message);
+    public abstract boolean acquire_group_lock(String group, String sender);
+    public abstract void start();
+
+    public <T> String publish(String topic, T data) {
         final String sender = makeSenderId();
         this.publish(topic, data, 200, sender);
         return sender;
     }
 
-    default <T> String publish(String topic, T data, int code) {
+    public <T> String publish(String topic, T data, int code) {
         final String sender = makeSenderId();
         this.publish(topic, data, code, sender);
         return sender;
     }
 
-    default <T> String publish(String topic, T data, GilmourHandler respHandler) {
+    public <T> String publish(String topic, T data, GilmourHandler respHandler) {
         final String sender = makeSenderId();
         final String respChannel = responseTopic(sender);
         final GilmourHandlerOpts opts = GilmourHandlerOpts.createGilmourHandlerOpts().setOneshot().setSendResponse(false);
@@ -44,7 +47,7 @@ public interface Gilmour {
         return sender;
     }
 
-    default void execSubscribers(Subscribers subscribers, String key, String topic, String message) {
+    protected void execSubscribers(String key, String topic, String message) {
         synchronized (subscribers) {
             final ArrayList<GilmourSubscription> subs = subscribers.get(key);
             for(Iterator<GilmourSubscription> si = subs.iterator(); si.hasNext();) {
@@ -56,7 +59,7 @@ public interface Gilmour {
         }
     }
 
-    default void executeSubscriber(GilmourSubscription sub, String topic, String data) {
+    protected void executeSubscriber(GilmourSubscription sub, String topic, String data) {
         final GilmourProtocol.RecvGilmourData d = GilmourProtocol.parseJson(data);
         GilmourHandlerOpts opts = sub.getOpts();
         if (opts.getGroup() != null) {
@@ -68,7 +71,7 @@ public interface Gilmour {
         }).start();
     }
 
-    default void handleRequest(GilmourSubscription sub, String topic, GilmourProtocol.RecvGilmourData d) {
+    private void handleRequest(GilmourSubscription sub, String topic, GilmourProtocol.RecvGilmourData d) {
         GilmourRequest req = new RedisGilmourRequest(topic, d);
         GilmourResponder res = new RedisGilmourResponder(d.getSender());
         try {
@@ -90,23 +93,26 @@ public interface Gilmour {
         }
     }
 
-    default void addSubscriber(Subscribers subscribers, String topic, GilmourSubscription sub) {
+    protected GilmourSubscription add_subscriber(String topic, GilmourHandler h, GilmourHandlerOpts opts) {
+        final GilmourSubscription sub = new GilmourSubscription(h, opts);
         synchronized (subscribers) {
             if (subscribers.get(topic) == null) {
                 subscribers.put(topic, new ArrayList<>());
             }
             subscribers.get(topic).add(sub);
         }
+        return sub;
     }
 
-    default ArrayList<GilmourSubscription> removeSubscriber(Subscribers subscribers, String topic, GilmourSubscription sub) {
+    protected ArrayList<GilmourSubscription> remove_subscriber(String topic, GilmourSubscription sub) {
         synchronized (subscribers) {
             final ArrayList<GilmourSubscription> subs = subscribers.get(topic);
             subs.remove(sub);
             return subs;
         }
     }
-    default void clearSubscribers(Subscribers subscribers, String topic) {
+
+    protected void remove_subscribers(String topic) {
         synchronized (subscribers) {
             final ArrayList<GilmourSubscription> subs = subscribers.get(topic);
             subs.clear();
