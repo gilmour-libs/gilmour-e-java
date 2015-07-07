@@ -1,5 +1,6 @@
 package functional.redis;
 
+import com.google.gson.reflect.TypeToken;
 import gilmour.*;
 import org.testng.Assert;
 import org.testng.annotations.BeforeClass;
@@ -61,5 +62,31 @@ public class HealthTest extends BaseTest {
 
         redis.unsubscribe(topic, sub);
         redis.unsubscribe("gilmour.errors", errsub);
+    }
+
+    @Test
+    public void healthTest() throws InterruptedException {
+        redis.enableHealthChecks();
+        String topic = "healthtest.topic";
+        redis.subscribe(topic, (r, w) -> {
+            // do nothing
+        }, GilmourHandlerOpts.createGilmourHandlerOpts());
+        final Object resplock = new Object();
+        final ArrayList<String> retTopics = new ArrayList<>();
+
+        redis.publish("gilmour.health." + redis.getIdent().toString(), "ping",
+                (r, w) -> {
+                    TypeToken<ArrayList<String>> typeTok = new TypeToken<ArrayList<String>>() {};
+                    ArrayList<String> topics = r.data(typeTok.getType());
+                    System.err.println(topics);
+                    retTopics.addAll(topics);
+                    synchronized (resplock) {
+                        resplock.notifyAll();
+                    }
+                });
+        synchronized (resplock) {
+            resplock.wait(10000);
+        }
+        Assert.assertTrue(retTopics.contains(topic));
     }
 }

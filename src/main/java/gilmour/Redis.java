@@ -1,5 +1,7 @@
 package gilmour;
 
+import com.google.gson.Gson;
+import com.google.gson.reflect.TypeToken;
 import com.lambdaworks.redis.RedisClient;
 import com.lambdaworks.redis.RedisConnection;
 import com.lambdaworks.redis.protocol.SetArgs;
@@ -8,7 +10,9 @@ import com.lambdaworks.redis.pubsub.RedisPubSubListener;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
+import java.lang.reflect.Type;
 import java.util.ArrayList;
+import java.util.UUID;
 
 
 class RedisGilmourRequest implements GilmourRequest {
@@ -30,6 +34,11 @@ class RedisGilmourRequest implements GilmourRequest {
     }
 
     @Override
+    public <T> T data(Type cls) {
+        return this.gData.getData(cls);
+    }
+
+    @Override
     public String topic() {
         return topic;
     }
@@ -41,7 +50,7 @@ class RedisGilmourRequest implements GilmourRequest {
 
     @Override
     public String stringData() {
-        return gData.toString();
+        return gData.rawData();
     }
 }
 
@@ -91,6 +100,8 @@ class RedisGilmourResponder implements GilmourResponder{
 public class Redis extends Gilmour {
     private static String defaultErrorQueue = "gilmour.errorqueue";
     private static String defaultErrorTopic = "gilmour.errors";
+    private static String defaultHealthTopic = "gilmour.health";
+    private static String defaultIdentKey = "gilmour.known_host.health";
 
 
     public enum errorMethods {QUEUE, PUBLISH, NONE}
@@ -102,6 +113,7 @@ public class Redis extends Gilmour {
     private errorMethods errorMethod;
     private String errorQueue;
     private String errorTopic;
+
 
 
     public Redis(String host, int port) {
@@ -128,6 +140,7 @@ public class Redis extends Gilmour {
         this.errorTopic = errorTopic;
         return this;
     }
+
 
     public String getErrorQueue() {
         return errorQueue;
@@ -167,7 +180,9 @@ public class Redis extends Gilmour {
                 publish(this.errorTopic, message);
                 break;
             case QUEUE:
-                redisconnection.append(this.errorQueue, message.toString());
+                Gson gson = new Gson();
+                redisconnection.lpush(this.errorQueue, gson.toJson(message));
+                redisconnection.ltrim(this.errorQueue, 0, 9999);
                 break;
         }
     }
@@ -199,6 +214,21 @@ public class Redis extends Gilmour {
 
     public String responseTopic(String sender) {
         return RedisGilmourResponder.responseChannel(sender);
+    }
+
+    @Override
+    protected String healthTopic(String ident) {
+        return defaultHealthTopic + "." + ident;
+    }
+
+    @Override
+    protected void registerIdent(UUID uuid) {
+        redisconnection.hset(defaultIdentKey, uuid.toString(), "true");
+    }
+
+    @Override
+    protected void unRegisterIdent(UUID uuid) {
+        redisconnection.hdel(defaultIdentKey, uuid.toString());
     }
 
     public <T> void publish(String topic, T data, int code, String sender) {
@@ -256,11 +286,6 @@ public class Redis extends Gilmour {
             key = topic;
         }
         execSubscribers(key, topic, message);
-    }
-
-    @Override
-    public boolean isAResponse(String topic) {
-        return topic.startsWith(RedisGilmourResponder.defaultResponseTopic);
     }
 
     @Override

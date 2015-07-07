@@ -2,6 +2,12 @@ package gilmour;
 
 import com.google.gson.Gson;
 import com.google.gson.JsonElement;
+import com.google.gson.reflect.TypeToken;
+
+import java.lang.reflect.Type;
+import java.text.SimpleDateFormat;
+import java.util.Date;
+import java.util.TimeZone;
 
 import static java.util.UUID.randomUUID;
 
@@ -60,9 +66,19 @@ public class GilmourProtocol {
         private JsonElement data;
 
         public RecvGilmourData() {}
+
         public <T> T getData(Class<T> cls) {
             Gson gson = new Gson();
             return gson.fromJson(data, cls);
+        }
+
+        public <T> T getData(Type t) {
+            Gson gson = new Gson();
+            return gson.fromJson(data, t);
+        }
+
+        public String rawData() {
+            return data.toString();
         }
 
         public String getSender() {
@@ -90,16 +106,20 @@ public class GilmourProtocol {
         private final String sender;
         private final String topic;
         private final String request_data;
-        private final String message;
-        private final String stacktrace;
+        private final String userdata;
+        private final String backtrace;
+        private final String timestamp;
 
-        public GilmourErrorResponse(int code, String sender, String topic, String request_data, String message, String stacktrace) {
+        public GilmourErrorResponse(int code, String sender, String topic, String request_data, String userdata, String backtrace) {
             this.code = code;
             this.request_data = request_data;
-            this.message = message;
-            this.stacktrace = stacktrace;
+            this.userdata = userdata;
+            this.backtrace = backtrace;
             this.topic = topic;
             this.sender = sender;
+            final SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssXXX");
+            sdf.setTimeZone(TimeZone.getTimeZone("UTC"));
+            this.timestamp = sdf.format(new Date());
         }
 
         public int getCode() {
@@ -107,7 +127,7 @@ public class GilmourProtocol {
         }
 
         public String toString() {
-            return message + "\n" + stacktrace;
+            return userdata + "\n" + backtrace;
         }
 
         public String getSender() {
@@ -118,16 +138,16 @@ public class GilmourProtocol {
             return topic;
         }
 
-        public String getRequest_data() {
+        public String getRequestData() {
             return request_data;
         }
 
-        public String getMessage() {
-            return message;
+        public String getUserdata() {
+            return userdata;
         }
 
-        public String getStacktrace() {
-            return stacktrace;
+        public String getBacktrace() {
+            return backtrace;
         }
     }
 

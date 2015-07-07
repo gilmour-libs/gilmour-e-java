@@ -1,9 +1,6 @@
 package gilmour;
 
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.Iterator;
+import java.util.*;
 
 import static gilmour.GilmourProtocol.makeSenderId;
 
@@ -13,18 +10,51 @@ import static gilmour.GilmourProtocol.makeSenderId;
 public abstract class Gilmour {
     private class Subscribers extends HashMap<String, ArrayList<GilmourSubscription>> {}
     private Subscribers subscribers = new Subscribers();
+    private boolean enableHealthChecks = false;
+
+    private UUID ident;
 
     public abstract GilmourSubscription subscribe(String topic, GilmourHandler h, GilmourHandlerOpts opts);
     public abstract void unsubscribe(String topic, GilmourSubscription s);
     public abstract void unsubscribe(String topic);
-
-    public abstract String responseTopic(String sender);
     public abstract <T> void publish(String topic, T data, int code, String sender);
-    public abstract boolean isAResponse(String topic);
+
+    public abstract boolean acquire_group_lock(String group, String sender);
+
+    protected abstract String responseTopic(String sender);
+    protected abstract String healthTopic(String ident);
+    protected abstract void registerIdent(UUID uuid);
+    protected abstract void unRegisterIdent(UUID uuid);
+
     public abstract boolean canReportErrors();
     public abstract void reportError(GilmourProtocol.GilmourErrorResponse message);
-    public abstract boolean acquire_group_lock(String group, String sender);
+
     public abstract void start();
+    public void stop() {
+        if (enableHealthChecks) {
+            unRegisterIdent(ident);
+        }
+    }
+
+    public UUID getIdent() {
+        return ident;
+    }
+
+    public void enableHealthChecks() {
+        enableHealthChecks = true;
+        ident = UUID.randomUUID();
+        String topic = healthTopic(ident.toString());
+        subscribe(topic, (r, w) -> {
+            ArrayList<String> topics = new ArrayList<>();
+            topics.addAll(subscribers.keySet());
+            topics.removeIf((t) -> {
+                return (t.startsWith(responseTopic("")) ||
+                        t.startsWith(healthTopic(ident.toString())));
+            });
+            w.<ArrayList<String>>respond(topics);
+        }, GilmourHandlerOpts.createGilmourHandlerOpts());
+        registerIdent(ident);
+    }
 
     public <T> String publish(String topic, T data) {
         final String sender = makeSenderId();
@@ -108,6 +138,9 @@ public abstract class Gilmour {
         synchronized (subscribers) {
             final ArrayList<GilmourSubscription> subs = subscribers.get(topic);
             subs.remove(sub);
+            if (subs.isEmpty()) {
+                subscribers.remove(topic);
+            }
             return subs;
         }
     }
@@ -116,6 +149,7 @@ public abstract class Gilmour {
         synchronized (subscribers) {
             final ArrayList<GilmourSubscription> subs = subscribers.get(topic);
             subs.clear();
+            subscribers.remove(topic);
         }
     }
 }
