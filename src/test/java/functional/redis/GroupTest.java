@@ -11,7 +11,7 @@ import java.util.ArrayList;
  */
 public class GroupTest extends BaseTest {
     @Test
-    public void doubleSubscriberTest() {
+    public void doubleSubscriberTest() throws InterruptedException {
         final String topic = "testtopic";
         ArrayList<TestData> received = new ArrayList<>();
         final Object lock = new Object();
@@ -45,7 +45,7 @@ public class GroupTest extends BaseTest {
     }
 
     @Test
-    public void tripleSubscriberTest() {
+    public void tripleSubscriberTest() throws InterruptedException {
         final String topic = "testtopic";
         ArrayList<TestData> received = new ArrayList<>();
         final Object lock = new Object();
@@ -82,7 +82,7 @@ public class GroupTest extends BaseTest {
     }
 
     @Test
-    public void doubleWildcardTest() {
+    public void doubleWildcardTest() throws InterruptedException {
         final String topic = "testtopic";
         final String wildTopic = topic + ".*";
         ArrayList<TestData> received = new ArrayList<>();

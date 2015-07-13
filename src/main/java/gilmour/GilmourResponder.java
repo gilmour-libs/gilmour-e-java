@@ -3,10 +3,36 @@ package gilmour;
 /**
  * Created by aditya@datascale.io on 19/05/15.
  */
-public interface GilmourResponder {
-    <T> void respond(T response);
+public class GilmourResponder {
+    private final String senderchannel;
+    private Object message = null;
+    private int code = 0;
 
-    <T> void respond(T response, int code);
+    public boolean isResponseSent() {
+        return responseSent;
+    }
 
-    void send(Gilmour gilmour);
+    private boolean responseSent = false;
+
+    public GilmourResponder(String sender) {
+        this.senderchannel = sender;
+    }
+
+    public <T> void respond(T response) {
+        message = response;
+    }
+
+    public <T> void respond(T response, int code) {
+        message = response;
+        this.code = code;
+    }
+
+    public void send(Gilmour gilmourinst) {
+        if (responseSent) return;
+        if (code == 0)
+            gilmourinst.publish(senderchannel, message);
+        else
+            gilmourinst.publish(senderchannel, message, code);
+        responseSent = true;
+    }
 }

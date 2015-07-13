@@ -10,8 +10,8 @@ import org.testng.annotations.Test;
  */
 public class WildcardTest extends BaseTest {
     @Test
-    public void topicReceiveTest() {
-        final String topic = "testtopic";
+    public void topicReceiveTest() throws InterruptedException {
+        final String topic = "testwrecvtopic";
         final String wildTopic = topic + ".*";
         TestData received = new TestData();
         final Object lock = new Object();
@@ -39,8 +39,8 @@ public class WildcardTest extends BaseTest {
     }
 
     @Test
-    public void topicResponsedTest() {
-        final String topic = "testtopic";
+    public void topicResponseTest() throws InterruptedException {
+        final String topic = "testwresptopic";
         final String wildTopic = topic + ".*";
         TestData received = new TestData();
         final Object lock = new Object();
@@ -58,11 +58,7 @@ public class WildcardTest extends BaseTest {
             }
         });
         synchronized (lock) {
-            try {
-                lock.wait(10000);
-            } catch (InterruptedException e) {
-                e.printStackTrace();
-            }
+            lock.wait(10000);
         }
         redis.unsubscribe(wildTopic, sub);
         Assert.assertEquals(received.intval, sent.intval + 1);

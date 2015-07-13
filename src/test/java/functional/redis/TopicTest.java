@@ -18,8 +18,8 @@ public class TopicTest extends BaseTest {
     }
 
     @Test
-    public void topicReceiveTest() {
-        final String topic = "testtopic";
+    public void topicReceiveTest() throws InterruptedException {
+        final String topic = "testrecvtopic";
         TestData received = new TestData();
         final Object lock = new Object();
 
@@ -47,8 +47,8 @@ public class TopicTest extends BaseTest {
     }
 
     @Test
-    public void requestTest() {
-        final String topic = "testtopic";
+    public void requestTest() throws InterruptedException {
+        final String topic = "testreqtopic";
         final Object lock = new Object();
         RecvData recvData = new RecvData();
         GilmourSubscription sub = redis.subscribe(topic, (r, w) -> {
@@ -74,8 +74,8 @@ public class TopicTest extends BaseTest {
     }
 
     @Test
-    public void topicGoodResponseTest() {
-        final String topic = "testtopic";
+    public void topicGoodResponseTest() throws InterruptedException {
+        final String topic = "testresptopic";
         TestData received = new TestData();
         RecvData rd = new RecvData();
         final Object lock = new Object();
@@ -107,8 +107,8 @@ public class TopicTest extends BaseTest {
     }
 
     @Test
-    public void topicCustomCodeTest() {
-        final String topic = "testtopic";
+    public void topicCustomCodeTest() throws InterruptedException {
+        final String topic = "testcustomtopic";
         final int respcode = 400;
         RecvData rd = new RecvData();
         final Object lock = new Object();
@@ -135,8 +135,8 @@ public class TopicTest extends BaseTest {
     }
 
     @Test
-    public void failedHandlerTest() {
-        final String topic = "testtopic";
+    public void failedHandlerTest() throws InterruptedException {
+        final String topic = "testfailtopic";
         final int respcode = 400;
         RecvData rd = new RecvData();
         final Object lock = new Object();

@@ -1,112 +1,29 @@
 package gilmour;
 
 import com.google.gson.Gson;
-import com.google.gson.reflect.TypeToken;
 import com.lambdaworks.redis.RedisClient;
 import com.lambdaworks.redis.RedisConnection;
+import com.lambdaworks.redis.RedisFuture;
 import com.lambdaworks.redis.protocol.SetArgs;
 import com.lambdaworks.redis.pubsub.RedisPubSubConnection;
 import com.lambdaworks.redis.pubsub.RedisPubSubListener;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
 
 import java.lang.reflect.Type;
 import java.util.ArrayList;
 import java.util.UUID;
-
-
-class RedisGilmourRequest implements GilmourRequest {
-    protected final String topic;
-    protected final GilmourProtocol.RecvGilmourData gData;
-
-    public RedisGilmourRequest(String topic, GilmourProtocol.RecvGilmourData gd) {
-        this.topic = topic;
-        this.gData = gd;
-    }
-    @Override
-    public String sender() {
-        return gData.getSender();
-    }
-
-    @Override
-    public <T> T data(Class<T> cls) {
-        return this.gData.getData(cls);
-    }
-
-    @Override
-    public <T> T data(Type cls) {
-        return this.gData.getData(cls);
-    }
-
-    @Override
-    public String topic() {
-        return topic;
-    }
-
-    @Override
-    public int code() {
-        return gData.getCode();
-    }
-
-    @Override
-    public String stringData() {
-        return gData.rawData();
-    }
-}
-
-
-class RedisGilmourResponder implements GilmourResponder{
-    static String defaultResponseTopic = "gilmour.response";
-    private final String senderchannel;
-    private Object message = null;
-    private int code = 0;
-
-    public boolean isResponseSent() {
-        return responseSent;
-    }
-
-    private boolean responseSent = false;
-
-    public static String responseChannel(String sender) {
-        return defaultResponseTopic + "." + sender;
-    }
-
-    public RedisGilmourResponder(String sender) {
-        this.senderchannel = responseChannel(sender);
-    }
-
-    @Override
-    public <T> void respond(T response) {
-        message = response;
-    }
-
-    @Override
-    public <T> void respond(T response, int code) {
-        message = response;
-        this.code = code;
-    }
-
-    @Override
-    public void send(Gilmour gilmourinst) {
-        if (responseSent) return;
-        if (code == 0)
-            gilmourinst.publish(senderchannel, message);
-        else
-            gilmourinst.publish(senderchannel, message, code);
-        responseSent = true;
-    }
-}
+import java.util.concurrent.TimeUnit;
 
 public class Redis extends Gilmour {
     private static String defaultErrorQueue = "gilmour.errorqueue";
     private static String defaultErrorTopic = "gilmour.errors";
     private static String defaultHealthTopic = "gilmour.health";
     private static String defaultIdentKey = "gilmour.known_host.health";
+    static String defaultResponseTopic = "gilmour.response";
 
 
     public enum errorMethods {QUEUE, PUBLISH, NONE}
 
-    private static final Logger logger = LogManager.getLogger();
+
     private final RedisConnection<String, String> redisconnection;
     private final RedisClient redis;
     private final RedisPubSubConnection<String, String> pubsub;
@@ -188,13 +105,15 @@ public class Redis extends Gilmour {
     }
 
     @Override
-    public GilmourSubscription subscribe(String topic, GilmourHandler h, GilmourHandlerOpts opts) {
+    public GilmourSubscription subscribe(String topic, GilmourHandler h, GilmourHandlerOpts opts) throws InterruptedException {
         GilmourSubscription sub = super.add_subscriber(topic, h, opts);
+        RedisFuture<Void> psubscribe;
         if (topic.endsWith("*")) {
-            pubsub.psubscribe(topic);
+            psubscribe = pubsub.psubscribe(topic);
         } else {
-            pubsub.subscribe(topic);
+            psubscribe = pubsub.subscribe(topic);
         }
+        psubscribe.await(1, TimeUnit.SECONDS);
         return sub;
     }
 
@@ -213,7 +132,7 @@ public class Redis extends Gilmour {
     }
 
     public String responseTopic(String sender) {
-        return RedisGilmourResponder.responseChannel(sender);
+        return defaultResponseTopic + "." + sender;
     }
 
     @Override

@@ -8,7 +8,7 @@ import gilmour.Redis;
  */
 
 public class Run {
-    public static void main(String[] args) {
+    public static void main(String[] args) throws InterruptedException {
         final Redis redis = new Redis();
         redis.subscribe("echo*", (r, w) -> {
             w.respond("Pong");

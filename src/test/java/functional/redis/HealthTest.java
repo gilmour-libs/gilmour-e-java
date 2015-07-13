@@ -19,7 +19,7 @@ public class HealthTest extends BaseTest {
 
     @Test
     public void errorTest() throws InterruptedException {
-        final String topic = "testtopic";
+        final String topic = "testerrtopic";
         ArrayList<Integer> received = new ArrayList<>();
         final Object resplock = new Object();
         final Object errlock = new Object();

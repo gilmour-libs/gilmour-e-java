@@ -1,5 +1,8 @@
 package gilmour;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+
 import java.util.*;
 
 import static gilmour.GilmourProtocol.makeSenderId;
@@ -14,7 +17,9 @@ public abstract class Gilmour {
 
     private UUID ident;
 
-    public abstract GilmourSubscription subscribe(String topic, GilmourHandler h, GilmourHandlerOpts opts);
+    protected static final Logger logger = LogManager.getLogger();
+
+    public abstract GilmourSubscription subscribe(String topic, GilmourHandler h, GilmourHandlerOpts opts) throws InterruptedException;
     public abstract void unsubscribe(String topic, GilmourSubscription s);
     public abstract void unsubscribe(String topic);
     public abstract <T> void publish(String topic, T data, int code, String sender);
@@ -40,7 +45,7 @@ public abstract class Gilmour {
         return ident;
     }
 
-    public void enableHealthChecks() {
+    public void enableHealthChecks() throws InterruptedException {
         enableHealthChecks = true;
         ident = UUID.randomUUID();
         String topic = healthTopic(ident.toString());
@@ -68,7 +73,7 @@ public abstract class Gilmour {
         return sender;
     }
 
-    public <T> String publish(String topic, T data, GilmourHandler respHandler) {
+    public <T> String publish(String topic, T data, GilmourHandler respHandler) throws InterruptedException {
         final String sender = makeSenderId();
         final String respChannel = responseTopic(sender);
         final GilmourHandlerOpts opts = GilmourHandlerOpts.createGilmourHandlerOpts().setOneshot().setSendResponse(false);
@@ -80,6 +85,10 @@ public abstract class Gilmour {
     protected void execSubscribers(String key, String topic, String message) {
         synchronized (subscribers) {
             final ArrayList<GilmourSubscription> subs = subscribers.get(key);
+            if (subs == null) {
+                logger.error("No subs found!! Key: " + key + ", Topic: " + topic);
+                return;
+            }
             for(Iterator<GilmourSubscription> si = subs.iterator(); si.hasNext();) {
                 GilmourSubscription s = si.next();
                 if (s.getOpts().isOneshot())
@@ -102,8 +111,8 @@ public abstract class Gilmour {
     }
 
     private void handleRequest(GilmourSubscription sub, String topic, GilmourProtocol.RecvGilmourData d) {
-        GilmourRequest req = new RedisGilmourRequest(topic, d);
-        GilmourResponder res = new RedisGilmourResponder(d.getSender());
+        GilmourRequest req = new GilmourRequest(topic, d);
+        GilmourResponder res = new GilmourResponder(responseTopic(d.getSender()));
         try {
             sub.getHandler().process(req, res);
         }
