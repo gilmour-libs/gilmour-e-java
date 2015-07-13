@@ -15,7 +15,7 @@ public class WildcardTest extends BaseTest {
         final String wildTopic = topic + ".*";
         TestData received = new TestData();
         final Object lock = new Object();
-        GilmourSubscription sub = redis.subscribe(wildTopic, (r, w) -> {
+        GilmourSubscription sub = gilmour.subscribe(wildTopic, (r, w) -> {
             TestData td = r.data(TestData.class);
             logger.debug("Received data: " + td.strval);
             received.strval = td.strval;
@@ -26,14 +26,14 @@ public class WildcardTest extends BaseTest {
         }, GilmourHandlerOpts.createGilmourHandlerOpts());
         TestData sent = new TestData("command", 0);
         synchronized (lock) {
-            redis.publish(topic + ".foo", sent);
+            gilmour.publish(topic + ".foo", sent);
             try {
                 lock.wait(10000);
             } catch (InterruptedException e) {
                 e.printStackTrace();
             }
         }
-        redis.unsubscribe(wildTopic, sub);
+        gilmour.unsubscribe(wildTopic, sub);
         Assert.assertEquals(received.intval, sent.intval);
         Assert.assertEquals(received.strval, sent.strval);
     }
@@ -44,12 +44,12 @@ public class WildcardTest extends BaseTest {
         final String wildTopic = topic + ".*";
         TestData received = new TestData();
         final Object lock = new Object();
-        GilmourSubscription sub = redis.subscribe(wildTopic, (r, w) -> {
+        GilmourSubscription sub = gilmour.subscribe(wildTopic, (r, w) -> {
             TestData td = r.data(TestData.class);
             w.respond(new TestData(td.strval, td.intval + 1));
         }, GilmourHandlerOpts.createGilmourHandlerOpts());
         TestData sent = new TestData("command", 0);
-        redis.publish(topic + ".foo", sent, (r,w) -> {
+        gilmour.publish(topic + ".foo", sent, (r,w) -> {
             TestData td = r.data(TestData.class);
             received.intval = td.intval;
             received.strval = td.strval;
@@ -60,7 +60,7 @@ public class WildcardTest extends BaseTest {
         synchronized (lock) {
             lock.wait(10000);
         }
-        redis.unsubscribe(wildTopic, sub);
+        gilmour.unsubscribe(wildTopic, sub);
         Assert.assertEquals(received.intval, sent.intval + 1);
         Assert.assertEquals(received.strval, sent.strval);
     }

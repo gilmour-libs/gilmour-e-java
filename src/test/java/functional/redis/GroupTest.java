@@ -23,21 +23,21 @@ public class GroupTest extends BaseTest {
                 lock.notifyAll();
             }
         };
-        GilmourSubscription sub1 = redis.subscribe(topic, handler,
+        GilmourSubscription sub1 = gilmour.subscribe(topic, handler,
                 GilmourHandlerOpts.createGilmourHandlerOpts().setGroup("testgroup"));
-        GilmourSubscription sub2 = redis.subscribe(topic, handler,
+        GilmourSubscription sub2 = gilmour.subscribe(topic, handler,
                 GilmourHandlerOpts.createGilmourHandlerOpts().setGroup("testgroup"));
         TestData sent = new TestData("command", 0);
         synchronized (lock) {
-            redis.publish(topic, sent);
+            gilmour.publish(topic, sent);
             try {
                 lock.wait(10000);
             } catch (InterruptedException e) {
                 e.printStackTrace();
             }
         }
-        redis.unsubscribe(topic, sub1);
-        redis.unsubscribe(topic, sub2);
+        gilmour.unsubscribe(topic, sub1);
+        gilmour.unsubscribe(topic, sub2);
         Assert.assertEquals(received.size(), 1);
         TestData d = received.get(0);
         Assert.assertEquals(d.intval, sent.intval);
@@ -57,24 +57,24 @@ public class GroupTest extends BaseTest {
                 lock.notifyAll();
             }
         };
-        GilmourSubscription sub1 = redis.subscribe(topic, handler,
+        GilmourSubscription sub1 = gilmour.subscribe(topic, handler,
                 GilmourHandlerOpts.createGilmourHandlerOpts().setGroup("testgroup"));
-        GilmourSubscription sub2 = redis.subscribe(topic, handler,
+        GilmourSubscription sub2 = gilmour.subscribe(topic, handler,
                 GilmourHandlerOpts.createGilmourHandlerOpts().setGroup("testgroup"));
-        GilmourSubscription sub3 = redis.subscribe(topic, handler,
+        GilmourSubscription sub3 = gilmour.subscribe(topic, handler,
                 GilmourHandlerOpts.createGilmourHandlerOpts().setGroup("testgroup"));
         TestData sent = new TestData("command", 0);
         synchronized (lock) {
-            redis.publish(topic, sent);
+            gilmour.publish(topic, sent);
             try {
                 lock.wait(10000);
             } catch (InterruptedException e) {
                 e.printStackTrace();
             }
         }
-        redis.unsubscribe(topic, sub1);
-        redis.unsubscribe(topic, sub2);
-        redis.unsubscribe(topic, sub3);
+        gilmour.unsubscribe(topic, sub1);
+        gilmour.unsubscribe(topic, sub2);
+        gilmour.unsubscribe(topic, sub3);
         Assert.assertEquals(received.size(), 1);
         TestData d = received.get(0);
         Assert.assertEquals(d.intval, sent.intval);
@@ -95,24 +95,24 @@ public class GroupTest extends BaseTest {
                 lock.notifyAll();
             }
         };
-        GilmourSubscription sub1 = redis.subscribe(wildTopic, handler,
+        GilmourSubscription sub1 = gilmour.subscribe(wildTopic, handler,
                 GilmourHandlerOpts.createGilmourHandlerOpts().setGroup("testgroup"));
-        GilmourSubscription sub2 = redis.subscribe(wildTopic, handler,
+        GilmourSubscription sub2 = gilmour.subscribe(wildTopic, handler,
                 GilmourHandlerOpts.createGilmourHandlerOpts().setGroup("testgroup"));
-        GilmourSubscription sub3 = redis.subscribe(wildTopic, handler,
+        GilmourSubscription sub3 = gilmour.subscribe(wildTopic, handler,
                 GilmourHandlerOpts.createGilmourHandlerOpts().setGroup("testgroup"));
         TestData sent = new TestData("doubleWildcardTest", 0);
         synchronized (lock) {
-            redis.publish(topic + ".foo", sent);
+            gilmour.publish(topic + ".foo", sent);
             try {
                 lock.wait(10000);
             } catch (InterruptedException e) {
                 e.printStackTrace();
             }
         }
-        redis.unsubscribe(wildTopic, sub1);
-        redis.unsubscribe(wildTopic, sub2);
-        redis.unsubscribe(wildTopic, sub3);
+        gilmour.unsubscribe(wildTopic, sub1);
+        gilmour.unsubscribe(wildTopic, sub2);
+        gilmour.unsubscribe(wildTopic, sub3);
         Assert.assertEquals(received.size(), 1);
         TestData d = received.get(0);
         Assert.assertEquals(d.intval, sent.intval);

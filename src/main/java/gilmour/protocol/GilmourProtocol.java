@@ -1,8 +1,7 @@
-package gilmour;
+package gilmour.protocol;
 
 import com.google.gson.Gson;
 import com.google.gson.JsonElement;
-import com.google.gson.reflect.TypeToken;
 
 import java.lang.reflect.Type;
 import java.text.SimpleDateFormat;
@@ -23,7 +22,7 @@ public class GilmourProtocol {
         private GilmourData() {
         }
 
-        static GilmourData createGilmourData() {
+        public static GilmourData createGilmourData() {
             return new GilmourData();
         }
 

@@ -1,4 +1,4 @@
-package gilmour;
+package gilmour.backends;
 
 import com.google.gson.Gson;
 import com.lambdaworks.redis.RedisClient;
@@ -7,21 +7,27 @@ import com.lambdaworks.redis.RedisFuture;
 import com.lambdaworks.redis.protocol.SetArgs;
 import com.lambdaworks.redis.pubsub.RedisPubSubConnection;
 import com.lambdaworks.redis.pubsub.RedisPubSubListener;
+import gilmour.GilmourBackend;
+import gilmour.GilmourHandlerOpts;
+import gilmour.GilmourRequestExecutor;
+import gilmour.protocol.GilmourProtocol;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
-import java.lang.reflect.Type;
-import java.util.ArrayList;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
-public class Redis extends Gilmour {
+public class Redis implements GilmourBackend {
     private static String defaultErrorQueue = "gilmour.errorqueue";
     private static String defaultErrorTopic = "gilmour.errors";
     private static String defaultHealthTopic = "gilmour.health";
     private static String defaultIdentKey = "gilmour.known_host.health";
     static String defaultResponseTopic = "gilmour.response";
+    private GilmourRequestExecutor requestExecutor;
+    private Logger logger;
 
 
-    public enum errorMethods {QUEUE, PUBLISH, NONE}
+    public enum errorMethods {QUEUE, PUBLISH}
 
 
     private final RedisConnection<String, String> redisconnection;
@@ -42,7 +48,7 @@ public class Redis extends Gilmour {
         this.redis = new RedisClient(host, port);
         this.pubsub = redis.connectPubSub();
         this.redisconnection = redis.connect();
-        errorMethod = errorMethods.NONE;
+        setErrorMethod(errorMethods.PUBLISH);
     }
 
     public Redis() {
@@ -86,27 +92,22 @@ public class Redis extends Gilmour {
     }
 
     @Override
-    public boolean canReportErrors() {
-        return this.errorMethod != Redis.errorMethods.NONE;
-    }
-
-    @Override
     public void reportError(GilmourProtocol.GilmourErrorResponse message) {
+        Gson gson = new Gson();
+        String errMsg = gson.toJson(message);
         switch (this.errorMethod) {
             case PUBLISH:
-                publish(this.errorTopic, message);
+                publish(this.errorTopic, errMsg);
                 break;
             case QUEUE:
-                Gson gson = new Gson();
-                redisconnection.lpush(this.errorQueue, gson.toJson(message));
+                redisconnection.lpush(this.errorQueue, errMsg);
                 redisconnection.ltrim(this.errorQueue, 0, 9999);
                 break;
         }
     }
 
     @Override
-    public GilmourSubscription subscribe(String topic, GilmourHandler h, GilmourHandlerOpts opts) throws InterruptedException {
-        GilmourSubscription sub = super.add_subscriber(topic, h, opts);
+    public void subscribe(String topic, GilmourHandlerOpts opts) throws InterruptedException {
         RedisFuture<Void> psubscribe;
         if (topic.endsWith("*")) {
             psubscribe = pubsub.psubscribe(topic);
@@ -114,20 +115,10 @@ public class Redis extends Gilmour {
             psubscribe = pubsub.subscribe(topic);
         }
         psubscribe.await(1, TimeUnit.SECONDS);
-        return sub;
-    }
-
-    @Override
-    public void unsubscribe(String topic, GilmourSubscription s) {
-        final ArrayList<GilmourSubscription> remaining = super.remove_subscriber(topic, s);
-        if (remaining.isEmpty()) {
-            pubsub.unsubscribe(topic);
-        }
     }
 
     @Override
     public void unsubscribe(String topic) {
-        super.remove_subscribers(topic);
         pubsub.unsubscribe(topic);
     }
 
@@ -136,31 +127,38 @@ public class Redis extends Gilmour {
     }
 
     @Override
-    protected String healthTopic(String ident) {
+    public String healthTopic(String ident) {
         return defaultHealthTopic + "." + ident;
     }
 
     @Override
-    protected void registerIdent(UUID uuid) {
+    public void registerIdent(UUID uuid) {
         redisconnection.hset(defaultIdentKey, uuid.toString(), "true");
     }
 
     @Override
-    protected void unRegisterIdent(UUID uuid) {
+    public void unRegisterIdent(UUID uuid) {
         redisconnection.hdel(defaultIdentKey, uuid.toString());
     }
 
-    public <T> void publish(String topic, T data, int code, String sender) {
-        final String message = GilmourProtocol.GilmourData.createGilmourData().
-                setSender(sender).setData(data).setCode(code).render();
-        logger.debug(message);
+    public void publish(String topic, String message) {
         redisconnection.publish(topic, message);
     }
 
 
     @Override
-    public void start() {
+    public void start(GilmourRequestExecutor e, Logger l) {
+        if (l == null) {
+            this.logger = LogManager.getLogger();
+        }
+        this.requestExecutor = e;
+        this.logger = l;
         setupListeners();
+    }
+
+    @Override
+    public void stop() {
+
     }
 
     private void setupListeners() {
@@ -204,7 +202,7 @@ public class Redis extends Gilmour {
         } else {
             key = topic;
         }
-        execSubscribers(key, topic, message);
+        this.requestExecutor.execSubscribers(key, topic, message);
     }
 
     @Override

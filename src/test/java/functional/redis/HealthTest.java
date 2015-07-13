@@ -1,7 +1,12 @@
 package functional.redis;
 
+import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
+import com.lambdaworks.redis.RedisClient;
+import com.lambdaworks.redis.pubsub.RedisPubSubConnection;
+import com.lambdaworks.redis.pubsub.RedisPubSubListener;
 import gilmour.*;
+import gilmour.protocol.GilmourProtocol;
 import org.testng.Assert;
 import org.testng.annotations.BeforeClass;
 import org.testng.annotations.Test;
@@ -12,9 +17,15 @@ import java.util.ArrayList;
  * Created by aditya@datascale.io on 06/07/15.
  */
 public class HealthTest extends BaseTest {
+    private RedisClient errredis;
+    private RedisPubSubConnection<String, String> errpubsub;
+
     @BeforeClass
     public void setupHealth() {
-        this.redis.setErrorMethod(Redis.errorMethods.PUBLISH);
+        this.gilmour.enableErrorReporting();
+        this.errredis = new RedisClient("127.0.0.1", 6379);
+        this.errpubsub = errredis.connectPubSub();
+        this.errredis.connect();
     }
 
     @Test
@@ -25,7 +36,7 @@ public class HealthTest extends BaseTest {
         final Object errlock = new Object();
         ArrayList<GilmourProtocol.GilmourErrorResponse> errors = new ArrayList<>();
 
-        GilmourSubscription sub = redis.subscribe(topic, (r, w) -> {
+        GilmourSubscription sub = gilmour.subscribe(topic, (r, w) -> {
             throw new Exception("Simulated error");
         }, GilmourHandlerOpts.createGilmourHandlerOpts());
 
@@ -36,45 +47,60 @@ public class HealthTest extends BaseTest {
             }
         };
 
-        GilmourSubscription errsub = redis.subscribe("gilmour.errors", (r, w) -> {
-            try {
-                GilmourProtocol.GilmourErrorResponse err = r.data(GilmourProtocol.GilmourErrorResponse.class);
-                logger.debug("Received data: " + err);
-                errors.add(err);
-            } catch (Exception e) {
-                System.err.println("Cannot parse error channel message");
+        errpubsub.addListener(new RedisPubSubListener<String, String>() {
+            @Override
+            public void message(String ch, String data) {
+                try {
+                    Gson gson = new Gson();
+                    GilmourProtocol.GilmourErrorResponse err = gson.fromJson(data,GilmourProtocol.GilmourErrorResponse.class);
+                    logger.debug("Received data: " + err);
+                    errors.add(err);
+                } catch (Exception e) {
+                    System.err.println("Cannot parse error channel message");
+                }
+                synchronized (errlock) {
+                    errlock.notifyAll();
+                }
             }
-            synchronized (errlock) {
-                errlock.notifyAll();
-            }
-        }, GilmourHandlerOpts.createGilmourHandlerOpts().setSendResponse(false));
+            @Override
+            public void message(String s, String k1, String s2) {}
+            @Override
+            public void subscribed(String s, long l) {}
+            @Override
+            public void psubscribed(String s, long l) {}
+            @Override
+            public void unsubscribed(String s, long l) {}
+            @Override
+            public void punsubscribed(String s, long l) {}
+        });
+        errpubsub.subscribe("gilmour.errors");
 
         synchronized (resplock) {
-            redis.publish(topic, "Error test", resHandler);
-            resplock.wait(10000);
+            gilmour.publish(topic, "Error test", resHandler);
+            resplock.wait(1000);
         }
         synchronized (errlock) {
-            errlock.wait(10000);
+            errlock.wait(1000);
         }
         Assert.assertFalse(errors.isEmpty());
         Assert.assertEquals(errors.get(0).getCode(), 500);
         Assert.assertEquals(errors.get(0).getTopic(), topic);
 
-        redis.unsubscribe(topic, sub);
-        redis.unsubscribe("gilmour.errors", errsub);
+        gilmour.unsubscribe(topic, sub);
+        errpubsub.unsubscribe("gilmour.errors");
     }
 
     @Test
     public void healthTest() throws InterruptedException {
-        redis.enableHealthChecks();
+        gilmour.enableHealthChecks();
         String topic = "healthtest.topic";
-        redis.subscribe(topic, (r, w) -> {
+        gilmour.subscribe(topic, (r, w) -> {
             // do nothing
         }, GilmourHandlerOpts.createGilmourHandlerOpts());
         final Object resplock = new Object();
         final ArrayList<String> retTopics = new ArrayList<>();
 
-        redis.publish("gilmour.health." + redis.getIdent().toString(), "ping",
+        gilmour.publish("gilmour.health." + gilmour.getIdent().toString(), "ping",
                 (r, w) -> {
                     TypeToken<ArrayList<String>> typeTok = new TypeToken<ArrayList<String>>() {};
                     ArrayList<String> topics = r.data(typeTok.getType());

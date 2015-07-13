@@ -1,6 +1,7 @@
 package functional.redis;
 
-import gilmour.Redis;
+import gilmour.Gilmour;
+import gilmour.backends.Redis;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.testng.annotations.AfterClass;
@@ -10,7 +11,7 @@ import org.testng.annotations.BeforeClass;
  * Created by aditya@datascale.io@datascale.io on 27/05/15.
  */
 public class BaseTest {
-    protected Redis redis;
+    protected Gilmour<Redis> gilmour;
     static final Logger logger = LogManager.getLogger();
 
     static class TestData {
@@ -26,8 +27,9 @@ public class BaseTest {
 
     @BeforeClass
     public void setUp() {
-        redis = new Redis();
-        redis.start();
+        Redis backend = new Redis();
+        gilmour = new Gilmour<>(backend);
+        gilmour.start();
     }
 
     @AfterClass

@@ -1,6 +1,6 @@
 package gilmour;
 
-import com.google.gson.reflect.TypeToken;
+import gilmour.protocol.GilmourProtocol;
 
 import java.lang.reflect.Type;
 
