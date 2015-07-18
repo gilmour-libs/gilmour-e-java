@@ -27,12 +27,13 @@ public class GilmourResponder {
         this.code = code;
     }
 
-    public void send(Gilmour gilmourinst) {
-        if (responseSent) return;
+    public boolean send(Gilmour gilmourinst) {
+        if (responseSent) return false;
         if (code == 0)
             gilmourinst.publish(senderchannel, message);
         else
             gilmourinst.publish(senderchannel, message, code);
         responseSent = true;
+        return true;
     }
 }

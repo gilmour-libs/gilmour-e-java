@@ -14,6 +14,7 @@ import gilmour.protocol.GilmourProtocol;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
+import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
@@ -94,7 +95,14 @@ public class Redis implements GilmourBackend {
     @Override
     public void reportError(GilmourProtocol.GilmourErrorResponse message) {
         Gson gson = new Gson();
-        String errMsg = gson.toJson(message);
+        String errMsg;
+        try {
+            errMsg = gson.toJson(message);
+        } catch (Exception e) {
+            logger.debug(e.getMessage());
+            logger.debug(e.getStackTrace());
+            return;
+        }
         switch (this.errorMethod) {
             case PUBLISH:
                 publish(this.errorTopic, errMsg);
@@ -114,7 +122,7 @@ public class Redis implements GilmourBackend {
         } else {
             psubscribe = pubsub.subscribe(topic);
         }
-        psubscribe.await(1, TimeUnit.SECONDS);
+        psubscribe.await(10, TimeUnit.SECONDS);
     }
 
     @Override
@@ -159,6 +167,19 @@ public class Redis implements GilmourBackend {
     @Override
     public void stop() {
 
+    }
+
+    @Override
+    public boolean hasActiveSubscribers(String topic) {
+        boolean result = false;
+        try {
+            final Map<String, Long> subs = this.redisconnection.pubsubNumsub(topic);
+            if(subs.get(topic) > 0)
+                result = true;
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        return result;
     }
 
     private void setupListeners() {

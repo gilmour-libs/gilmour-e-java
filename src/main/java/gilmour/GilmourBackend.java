@@ -14,6 +14,7 @@ public interface GilmourBackend {
     <T> void publish(String topic, String message);
 
     boolean acquire_group_lock(String group, String sender);
+    default boolean hasActiveSubscribers(String topic) { return true; }
 
     String responseTopic(String sender);
     String healthTopic(String ident);

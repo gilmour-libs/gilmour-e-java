@@ -1,6 +1,7 @@
 package functional.redis;
 
 import gilmour.GilmourHandlerOpts;
+import gilmour.GilmourPublishOpts;
 import gilmour.GilmourSubscription;
 import org.testng.Assert;
 import org.testng.annotations.Test;
@@ -84,7 +85,7 @@ public class TopicTest extends BaseTest {
             w.respond(new TestData(td.strval, td.intval + 1));
         }, GilmourHandlerOpts.createGilmourHandlerOpts());
         TestData sent = new TestData("command", 0);
-        gilmour.publish(topic, sent, (r,w) -> {
+        gilmour.publish(topic, sent, (r, w) -> {
             TestData td = r.data(TestData.class);
             received.intval = td.intval;
             received.strval = td.strval;
@@ -92,7 +93,7 @@ public class TopicTest extends BaseTest {
             synchronized (lock) {
                 lock.notifyAll();
             }
-        });
+        }, GilmourPublishOpts.createGilmourPublishOpts().setConfirmSubscribers());
         synchronized (lock) {
             try {
                 lock.wait(10000);

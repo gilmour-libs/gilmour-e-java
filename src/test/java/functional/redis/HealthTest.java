@@ -54,24 +54,20 @@ public class HealthTest extends BaseTest {
                     Gson gson = new Gson();
                     GilmourProtocol.GilmourErrorResponse err = gson.fromJson(data,GilmourProtocol.GilmourErrorResponse.class);
                     logger.debug("Received data: " + err);
-                    errors.add(err);
+                    synchronized (errlock) {
+                        errors.add(err);
+                        errlock.notifyAll();
+                    }
                 } catch (Exception e) {
                     System.err.println("Cannot parse error channel message");
                 }
-                synchronized (errlock) {
-                    errlock.notifyAll();
-                }
+
             }
-            @Override
-            public void message(String s, String k1, String s2) {}
-            @Override
-            public void subscribed(String s, long l) {}
-            @Override
-            public void psubscribed(String s, long l) {}
-            @Override
-            public void unsubscribed(String s, long l) {}
-            @Override
-            public void punsubscribed(String s, long l) {}
+            @Override public void message(String s, String k1, String s2) {}
+            @Override public void subscribed(String s, long l) {}
+            @Override public void psubscribed(String s, long l) {}
+            @Override public void unsubscribed(String s, long l) {}
+            @Override public void punsubscribed(String s, long l) {}
         });
         errpubsub.subscribe("gilmour.errors");
 
@@ -88,6 +84,72 @@ public class HealthTest extends BaseTest {
 
         gilmour.unsubscribe(topic, sub);
         errpubsub.unsubscribe("gilmour.errors");
+    }
+
+    @Test
+    public void timeoutTest() throws InterruptedException {
+        final Object errlock = new Object();
+        final Object resplock = new Object();
+        ArrayList<GilmourProtocol.GilmourErrorResponse> errors = new ArrayList<>();
+        ArrayList<Integer> received = new ArrayList<>();
+        final String topic = "testtimeouttopic";
+        GilmourSubscription sub = gilmour.subscribe(topic, (r, w) -> {
+            Thread.currentThread().sleep(5000);
+        }, GilmourHandlerOpts.createGilmourHandlerOpts().setTimeout(3000));
+        errpubsub.addListener(new RedisPubSubListener<String, String>() {
+            @Override
+            public void message(String ch, String data) {
+                try {
+                    Gson gson = new Gson();
+                    GilmourProtocol.GilmourErrorResponse err = gson.fromJson(data, GilmourProtocol.GilmourErrorResponse.class);
+                    logger.debug("Received data: " + err);
+                    if (err.getCode() == 504) {
+                        synchronized (errlock) {
+                            errors.add(err);
+                            errlock.notifyAll();
+                        }
+                    }
+                } catch (Exception e) {
+                    System.err.println("Cannot parse error channel message");
+                }
+
+            }
+
+            @Override public void message(String s, String k1, String s2) {}
+            @Override public void subscribed(String s, long l) {}
+            @Override public void psubscribed(String s, long l) {}
+            @Override public void unsubscribed(String s, long l) {}
+            @Override public void punsubscribed(String s, long l) {}
+        });
+        errpubsub.subscribe("gilmour.errors");
+        gilmour.publish(topic, "Timeout test", (r, w) -> {
+            received.add(r.code());
+            synchronized (resplock) {
+                resplock.notifyAll();
+            }
+        });
+        synchronized (errlock) {
+            errlock.wait(4000);
+        }
+        Assert.assertEquals(received.get(0).intValue(), 504);
+        Assert.assertFalse(errors.isEmpty());
+    }
+
+    @Test
+    public void confirmSubscribersTest() throws InterruptedException {
+        final String topic = "confirmsubscribertopic";
+        ArrayList<Integer> received = new ArrayList<>();
+        final Object resplock = new Object();
+        gilmour.publish(topic, "confirm subscriber", (r, w) -> {
+            received.add(r.code());
+            synchronized (resplock) {
+                resplock.notifyAll();
+            }
+        }, GilmourPublishOpts.createGilmourPublishOpts().setConfirmSubscribers());
+        synchronized (resplock) {
+            resplock.wait(1000);
+        }
+        Assert.assertEquals(received.get(0).intValue(), 404);
     }
 
     @Test

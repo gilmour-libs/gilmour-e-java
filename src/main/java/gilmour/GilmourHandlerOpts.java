@@ -8,6 +8,16 @@ public class GilmourHandlerOpts {
     private String group = null;
     private boolean oneshot = false;
     private boolean sendResponse = true;
+    private long timeout = -1;
+
+    public long getTimeout() {
+        return timeout;
+    }
+
+    public GilmourHandlerOpts setTimeout(long timeout) {
+        this.timeout = timeout;
+        return this;
+    }
 
     public boolean sendResponse() {
         return sendResponse;

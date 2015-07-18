@@ -111,16 +111,37 @@ public class Gilmour<T extends GilmourBackend> implements GilmourRequestExecutor
 
     public <T> String publish(String topic, T data) {
         final String sender = makeSenderId();
-        this.publish(topic, data, 200, sender);
+        publish(topic, data, 200, sender);
         return sender;
     }
 
 
-    public <T> String publish(String topic, T data, GilmourHandler respHandler) throws InterruptedException {
+    public <T> String publish(String topic, T data,
+                              GilmourHandler respHandler) throws InterruptedException {
+        return publish(topic, data, respHandler, GilmourPublishOpts.createGilmourPublishOpts());
+    }
+
+
+    public <T> String publish(String topic, T data,
+                              GilmourHandler respHandler,
+                              GilmourPublishOpts pOpts) throws InterruptedException {
         final String sender = makeSenderId();
         final String respChannel = backend.responseTopic(sender);
         final GilmourHandlerOpts opts = GilmourHandlerOpts.createGilmourHandlerOpts().setOneshot().setSendResponse(false);
         subscribe(respChannel, respHandler, opts);
+        if (pOpts.getTimeout() > 0) {
+            Timer timer = new Timer();
+            timer.schedule(new TimerTask() {
+                @Override
+                public void run() {
+                    simulateErrorCallback(respChannel, 499, new GilmourProtocol.GilmourEmptyResponse());
+                }
+            }, pOpts.getTimeout());
+        }
+        if(pOpts.confirmSubscribers() && !backend.hasActiveSubscribers(topic)) {
+            simulateErrorCallback(respChannel, 404, new GilmourProtocol.GilmourEmptyResponse());
+            return null;
+        }
         publish(topic, data, 200, sender);
         return sender;
     }
@@ -170,10 +191,33 @@ public class Gilmour<T extends GilmourBackend> implements GilmourRequestExecutor
     private void handleRequest(GilmourSubscription sub, String topic, GilmourProtocol.RecvGilmourData d) {
         GilmourRequest req = new GilmourRequest(topic, d);
         GilmourResponder res = new GilmourResponder(backend.responseTopic(d.getSender()));
+        Thread currentThread = Thread.currentThread();
+        final Gilmour<T> self = this;
         try {
+            if(sub.getOpts().getTimeout() > 0) {
+                Timer timer = new Timer();
+                timer.schedule(new TimerTask() {
+                    @Override
+                    public void run() { try {
+                        res.respond(new GilmourProtocol.GilmourEmptyResponse(), 504);
+                        boolean sent = res.send(self);
+                        if (shouldReportErrors()) {
+                            final GilmourProtocol.GilmourErrorResponse error = new GilmourProtocol.GilmourErrorResponse(504, d.getSender(),
+                                    topic, req.stringData(), "Timeout", "");
+                            backend.reportError(error);
+                        }
+                        if (currentThread != null && currentThread.isAlive())
+                            currentThread.interrupt();
+                    } catch(Exception e) {
+                        logger.debug(e.getMessage());
+                        logger.debug(e.getStackTrace());
+                    }}
+                }, sub.getOpts().getTimeout());
+            }
             sub.getHandler().process(req, res);
         }
         catch (Exception e) {
+            logger.debug(e.getMessage());
             final GilmourProtocol.GilmourErrorResponse error = new GilmourProtocol.GilmourErrorResponse(500, d.getSender(),
                     topic, req.stringData(), e.getMessage(),
                     Arrays.toString(e.getStackTrace()));
@@ -217,6 +261,14 @@ public class Gilmour<T extends GilmourBackend> implements GilmourRequestExecutor
             subs.clear();
             subscribers.remove(topic);
         }
+    }
+
+
+    private void simulateErrorCallback(String topic, int code, Object data) {
+        GilmourProtocol.GilmourData sim = GilmourProtocol.GilmourData.createGilmourData();
+        sim.setCode(code).setSender("").setData(data);
+        String simulatedErrorMsg = sim.render();
+        execSubscribers(topic, topic, simulatedErrorMsg);
     }
 
     /**
